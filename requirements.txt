@@ -1,0 +1,1663 @@
+# requirements.txt
+"""
+flask==2.3.3
+flask-cors==4.0.0
+google-generativeai==0.3.2
+scikit-learn==1.3.0
+pandas==2.1.1
+numpy==1.24.3
+nltk==3.8.1
+requests==2.31.0
+python-dotenv==1.0.0
+sentence-transformers==2.2.2
+chromadb==0.4.15
+sqlalchemy==2.0.21
+"""
+
+# app.py - Main Flask Application
+import os
+import json
+import logging
+from datetime import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import google.generativeai as genai
+from bug_classifier import BugClassifier
+from fix_suggester import FixSuggester
+from github_integration import GitHubIntegration
+from database_manager import DatabaseManager
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+CORS(app)
+
+# Configuration
+API_KEY = "AIzaSyCnW8I41ZJsGUIIayF7lCEE5VuwjE-0fuE"
+genai.configure(api_key=API_KEY)
+
+# Initialize components
+bug_classifier = BugClassifier(api_key=API_KEY)
+fix_suggester = FixSuggester(api_key=API_KEY)
+github_integration = GitHubIntegration()
+db_manager = DatabaseManager()
+
+@app.route('/api/analyze-bug', methods=['POST'])
+def analyze_bug():
+    try:
+        data = request.json
+        title = data.get('title', '')
+        description = data.get('description', '')
+        environment = data.get('environment', '')
+        component = data.get('component', '')
+        
+        if not title or not description:
+            return jsonify({'error': 'Title and description are required'}), 400
+        
+        # Step 1: Classify the bug using AI
+        classification = bug_classifier.classify(title, description, environment, component)
+        
+        # Step 2: Find similar bugs
+        similar_bugs = fix_suggester.find_similar_bugs(title, description, classification)
+        
+        # Step 3: Generate fix suggestions
+        fix_suggestions = fix_suggester.generate_suggestions(
+            title, description, classification, similar_bugs
+        )
+        
+        # Step 4: Store in database for future learning
+        bug_data = {
+            'title': title,
+            'description': description,
+            'environment': environment,
+            'component': component,
+            'classification': classification,
+            'timestamp': datetime.now().isoformat()
+        }
+        db_manager.store_bug(bug_data)
+        
+        return jsonify({
+            'classification': classification,
+            'similar_bugs': similar_bugs,
+            'fix_suggestions': fix_suggestions,
+            'recommended_actions': generate_recommended_actions(classification)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error analyzing bug: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@app.route('/api/github-sync', methods=['POST'])
+def sync_github_issues():
+    try:
+        data = request.json
+        repo_url = data.get('repo_url', '')
+        
+        if not repo_url:
+            return jsonify({'error': 'Repository URL is required'}), 400
+        
+        issues = github_integration.fetch_issues(repo_url)
+        processed_count = 0
+        
+        for issue in issues:
+            # Process each GitHub issue
+            classification = bug_classifier.classify(
+                issue['title'], 
+                issue['body'] or '', 
+                '', 
+                ''
+            )
+            
+            bug_data = {
+                'title': issue['title'],
+                'description': issue['body'] or '',
+                'source': 'github',
+                'github_id': issue['id'],
+                'classification': classification,
+                'status': issue['state'],
+                'timestamp': issue['created_at']
+            }
+            
+            db_manager.store_bug(bug_data)
+            processed_count += 1
+        
+        return jsonify({
+            'message': f'Successfully processed {processed_count} GitHub issues',
+            'processed_count': processed_count
+        })
+        
+    except Exception as e:
+        logger.error(f"Error syncing GitHub issues: {str(e)}")
+        return jsonify({'error': 'Error syncing GitHub issues'}), 500
+
+@app.route('/api/stats', methods=['GET'])
+def get_statistics():
+    try:
+        stats = db_manager.get_statistics()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error getting statistics: {str(e)}")
+        return jsonify({'error': 'Error fetching statistics'}), 500
+
+@app.route('/api/train-model', methods=['POST'])
+def train_model():
+    try:
+        # Retrain the model with latest data
+        training_data = db_manager.get_training_data()
+        bug_classifier.retrain(training_data)
+        fix_suggester.update_embeddings(training_data)
+        
+        return jsonify({'message': 'Model retrained successfully'})
+    except Exception as e:
+        logger.error(f"Error training model: {str(e)}")
+        return jsonify({'error': 'Error training model'}), 500
+
+def generate_recommended_actions(classification):
+    actions = []
+    
+    severity = classification.get('severity', 'low')
+    categories = classification.get('categories', [])
+    
+    # Priority assignment based on severity
+    if severity == 'critical':
+        actions.append("🚨 Assign immediately to senior developer")
+        actions.append("📞 Notify team lead and stakeholders")
+    elif severity == 'high':
+        actions.append("⚡ Assign to experienced developer within 24 hours")
+        actions.append("📋 Add to current sprint backlog")
+    else:
+        actions.append("📝 Add to product backlog for next sprint planning")
+    
+    # Category-specific actions
+    if 'security' in categories:
+        actions.append("🔒 Security review required before deployment")
+    if 'performance' in categories:
+        actions.append("📊 Performance testing recommended")
+    if 'ui' in categories:
+        actions.append("🎨 UX review and cross-browser testing needed")
+    
+    return actions
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=5000)
+
+
+# bug_classifier.py - AI-powered bug classification
+import google.generativeai as genai
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+import pandas as pd
+import numpy as np
+import pickle
+import re
+from typing import Dict, List
+
+class BugClassifier:
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel('gemini-pro')
+        
+        # Traditional ML models for fallback
+        self.severity_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
+        self.category_classifier = RandomForestClassifier(n_estimators=100, random_state=42)
+        self.vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')
+        
+        self.is_trained = False
+        self._load_or_create_models()
+    
+    def _load_or_create_models(self):
+        try:
+            # Try to load pre-trained models
+            with open('models/severity_classifier.pkl', 'rb') as f:
+                self.severity_classifier = pickle.load(f)
+            with open('models/category_classifier.pkl', 'rb') as f:
+                self.category_classifier = pickle.load(f)
+            with open('models/vectorizer.pkl', 'rb') as f:
+                self.vectorizer = pickle.load(f)
+            self.is_trained = True
+        except FileNotFoundError:
+            # Initialize with sample data if no models exist
+            self._init_with_sample_data()
+    
+    def _init_with_sample_data(self):
+        # Sample training data for initial model
+        sample_data = [
+            {"text": "login page crashes when entering invalid email", "severity": "high", "category": "authentication"},
+            {"text": "button not responding to clicks on mobile", "severity": "medium", "category": "ui"},
+            {"text": "database query timeout during peak hours", "severity": "critical", "category": "performance"},
+            {"text": "typo in welcome message", "severity": "low", "category": "content"},
+            {"text": "file upload fails for large files", "severity": "high", "category": "backend"},
+            {"text": "password reset email not sent", "severity": "medium", "category": "authentication"},
+            {"text": "page loading slowly on older browsers", "severity": "medium", "category": "performance"},
+            {"text": "SQL injection vulnerability in search", "severity": "critical", "category": "security"},
+        ]
+        
+        texts = [item["text"] for item in sample_data]
+        severities = [item["severity"] for item in sample_data]
+        categories = [item["category"] for item in sample_data]
+        
+        X = self.vectorizer.fit_transform(texts)
+        self.severity_classifier.fit(X, severities)
+        self.category_classifier.fit(X, categories)
+        self.is_trained = True
+        
+        # Save models
+        os.makedirs('models', exist_ok=True)
+        with open('models/severity_classifier.pkl', 'wb') as f:
+            pickle.dump(self.severity_classifier, f)
+        with open('models/category_classifier.pkl', 'wb') as f:
+            pickle.dump(self.category_classifier, f)
+        with open('models/vectorizer.pkl', 'wb') as f:
+            pickle.dump(self.vectorizer, f)
+    
+    def classify(self, title: str, description: str, environment: str = "", component: str = "") -> Dict:
+        # Combine all text for analysis
+        full_text = f"{title} {description} {environment}".strip()
+        
+        # Use Google AI for enhanced analysis
+        ai_classification = self._classify_with_ai(full_text, component)
+        
+        # Use traditional ML for validation/fallback
+        ml_classification = self._classify_with_ml(full_text)
+        
+        # Combine results with AI taking precedence
+        result = {
+            'severity': ai_classification.get('severity', ml_classification['severity']),
+            'confidence': ai_classification.get('confidence', ml_classification['confidence']),
+            'categories': list(set(ai_classification.get('categories', []) + [ml_classification['category']])),
+            'priority_score': self._calculate_priority_score(ai_classification.get('severity', ml_classification['severity'])),
+            'estimated_effort': self._estimate_effort(full_text, ai_classification.get('severity', ml_classification['severity'])),
+            'suggested_team': self._suggest_team(component, ai_classification.get('categories', [ml_classification['category']]))
+        }
+        
+        return result
+    
+    def _classify_with_ai(self, text: str, component: str) -> Dict:
+        try:
+            prompt = f"""
+            Analyze the following bug report and provide classification:
+            
+            Bug Report: {text}
+            Component: {component}
+            
+            Please provide a JSON response with the following structure:
+            {{
+                "severity": "critical|high|medium|low",
+                "categories": ["category1", "category2"],
+                "confidence": 0.95,
+                "reasoning": "Brief explanation of classification"
+            }}
+            
+            Consider:
+            - Critical: System crashes, security vulnerabilities, data loss
+            - High: Major functionality broken, significant user impact
+            - Medium: Moderate impact, workarounds available
+            - Low: Minor issues, cosmetic problems
+            
+            Categories: ui, backend, database, api, authentication, performance, security, validation, content
+            """
+            
+            response = self.model.generate_content(prompt)
+            
+            # Parse JSON from response
+            import json
+            result_text = response.text.strip()
+            if result_text.startswith('```json'):
+                result_text = result_text[7:-3]
+            elif result_text.startswith('```'):
+                result_text = result_text[3:-3]
+            
+            result = json.loads(result_text)
+            return result
+            
+        except Exception as e:
+            print(f"AI classification failed: {e}")
+            return {}
+    
+    def _classify_with_ml(self, text: str) -> Dict:
+        if not self.is_trained:
+            return {'severity': 'medium', 'category': 'general', 'confidence': 0.5}
+        
+        try:
+            X = self.vectorizer.transform([text])
+            
+            severity = self.severity_classifier.predict(X)[0]
+            severity_proba = np.max(self.severity_classifier.predict_proba(X))
+            
+            category = self.category_classifier.predict(X)[0]
+            category_proba = np.max(self.category_classifier.predict_proba(X))
+            
+            confidence = (severity_proba + category_proba) / 2
+            
+            return {
+                'severity': severity,
+                'category': category,
+                'confidence': float(confidence)
+            }
+        except Exception as e:
+            print(f"ML classification failed: {e}")
+            return {'severity': 'medium', 'category': 'general', 'confidence': 0.5}
+    
+    def _calculate_priority_score(self, severity: str) -> int:
+        severity_scores = {'critical': 100, 'high': 75, 'medium': 50, 'low': 25}
+        return severity_scores.get(severity, 50)
+    
+    def _estimate_effort(self, text: str, severity: str) -> str:
+        # Simple effort estimation based on keywords and severity
+        complex_keywords = ['database', 'integration', 'security', 'performance', 'architecture']
+        simple_keywords = ['typo', 'color', 'text', 'label', 'minor']
+        
+        text_lower = text.lower()
+        
+        if any(keyword in text_lower for keyword in complex_keywords) or severity == 'critical':
+            return 'High (8-16 hours)'
+        elif severity == 'high' or len(text.split()) > 50:
+            return 'Medium (4-8 hours)'
+        elif any(keyword in text_lower for keyword in simple_keywords) or severity == 'low':
+            return 'Low (1-2 hours)'
+        else:
+            return 'Medium (2-4 hours)'
+    
+    def _suggest_team(self, component: str, categories: List[str]) -> str:
+        team_mapping = {
+            'frontend': 'Frontend Team',
+            'backend': 'Backend Team',
+            'database': 'Database Team',
+            'api': 'API Team',
+            'ui': 'Frontend Team',
+            'authentication': 'Security Team',
+            'security': 'Security Team',
+            'performance': 'DevOps Team'
+        }
+        
+        if component and component in team_mapping:
+            return team_mapping[component]
+        
+        for category in categories:
+            if category in team_mapping:
+                return team_mapping[category]
+        
+        return 'General Development Team'
+    
+    def retrain(self, training_data: List[Dict]):
+        """Retrain the model with new data"""
+        if len(training_data) < 10:
+            return False
+        
+        df = pd.DataFrame(training_data)
+        texts = df['title'] + ' ' + df['description']
+        
+        # Extract labels from classification data
+        severities = [item['classification']['severity'] for item in training_data if 'classification' in item]
+        categories = [item['classification']['categories'][0] if item['classification']['categories'] else 'general' 
+                     for item in training_data if 'classification' in item]
+        
+        if len(severities) == len(texts):
+            X = self.vectorizer.fit_transform(texts)
+            
+            self.severity_classifier.fit(X, severities)
+            self.category_classifier.fit(X, categories)
+            
+            # Save updated models
+            with open('models/severity_classifier.pkl', 'wb') as f:
+                pickle.dump(self.severity_classifier, f)
+            with open('models/category_classifier.pkl', 'wb') as f:
+                pickle.dump(self.category_classifier, f)
+            with open('models/vectorizer.pkl', 'wb') as f:
+                pickle.dump(self.vectorizer, f)
+            
+            return True
+        
+        return False
+
+
+# fix_suggester.py - AI-powered fix suggestions
+import google.generativeai as genai
+from sentence_transformers import SentenceTransformer
+import chromadb
+import numpy as np
+from typing import Dict, List
+import json
+
+class FixSuggester:
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel('gemini-pro')
+        
+        # Initialize embedding model for similarity search
+        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        
+        # Initialize ChromaDB for vector storage
+        self.chroma_client = chromadb.Client()
+        try:
+            self.collection = self.chroma_client.get_collection("bug_fixes")
+        except:
+            self.collection = self.chroma_client.create_collection("bug_fixes")
+        
+        self._initialize_sample_fixes()
+    
+    def _initialize_sample_fixes(self):
+        """Initialize with sample fix data"""
+        sample_fixes = [
+            {
+                "id": "fix_1",
+                "title": "Login validation fails with valid emails",
+                "description": "Email validation regex doesn't handle plus signs in email addresses",
+                "fix": "Update email validation regex to: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/",
+                "category": "validation",
+                "resolution_time": "2 hours"
+            },
+            {
+                "id": "fix_2", 
+                "title": "Database connection timeout",
+                "description": "Connection pool exhausted during high traffic",
+                "fix": "Increase connection pool size and implement connection retry with exponential backoff",
+                "category": "database",
+                "resolution_time": "4 hours"
+            },
+            {
+                "id": "fix_3",
+                "title": "Button unresponsive after validation",
+                "description": "Submit button disabled after form validation fails",
+                "fix": "Remove disabled attribute and re-enable event listeners after validation",
+                "category": "ui",
+                "resolution_time": "1 hour"
+            }
+        ]
+        
+        # Add to vector database if not already present
+        existing_count = self.collection.count()
+        if existing_count == 0:
+            self._add_fixes_to_db(sample_fixes)
+    
+    def _add_fixes_to_db(self, fixes: List[Dict]):
+        """Add fixes to vector database"""
+        for fix in fixes:
+            text = f"{fix['title']} {fix['description']}"
+            embedding = self.embedding_model.encode(text).tolist()
+            
+            self.collection.add(
+                embeddings=[embedding],
+                documents=[text],
+                metadatas=[{
+                    "title": fix['title'],
+                    "fix": fix['fix'],
+                    "category": fix['category'],
+                    "resolution_time": fix.get('resolution_time', 'Unknown')
+                }],
+                ids=[fix['id']]
+            )
+    
+    def find_similar_bugs(self, title: str, description: str, classification: Dict) -> List[Dict]:
+        """Find similar bugs using vector similarity"""
+        query_text = f"{title} {description}"
+        query_embedding = self.embedding_model.encode(query_text).tolist()
+        
+        try:
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=3
+            )
+            
+            similar_bugs = []
+            if results['documents'] and results['documents'][0]:
+                for i, doc in enumerate(results['documents'][0]):
+                    metadata = results['metadatas'][0][i]
+                    distance = results['distances'][0][i] if 'distances' in results else 0.5
+                    
+                    similar_bugs.append({
+                        'title': metadata['title'],
+                        'fix': metadata['fix'],
+                        'category': metadata['category'],
+                        'similarity': max(0, 1 - distance),
+                        'resolution_time': metadata.get('resolution_time', 'Unknown')
+                    })
+            
+            return similar_bugs
+            
+        except Exception as e:
+            print(f"Error finding similar bugs: {e}")
+            return []
+    
+    def generate_suggestions(self, title: str, description: str, classification: Dict, similar_bugs: List[Dict]) -> List[Dict]:
+        """Generate AI-powered fix suggestions"""
+        
+        # Get AI-powered suggestions
+        ai_suggestions = self._get_ai_suggestions(title, description, classification, similar_bugs)
+        
+        # Get rule-based suggestions
+        rule_suggestions = self._get_rule_based_suggestions(classification)
+        
+        # Combine and rank suggestions
+        all_suggestions = ai_suggestions + rule_suggestions
+        
+        # Remove duplicates and rank by confidence
+        unique_suggestions = self._deduplicate_suggestions(all_suggestions)
+        
+        return sorted(unique_suggestions, key=lambda x: x['confidence'], reverse=True)[:5]
+    
+    def _get_ai_suggestions(self, title: str, description: str, classification: Dict, similar_bugs: List[Dict]) -> List[Dict]:
+        """Get fix suggestions from AI"""
+        try:
+            similar_fixes_context = ""
+            if similar_bugs:
+                similar_fixes_context = "Similar resolved issues:\n"
+                for bug in similar_bugs[:2]:
+                    similar_fixes_context += f"- {bug['title']}: {bug['fix']}\n"
+            
+            prompt = f"""
+            As a senior software engineer, analyze this bug and provide specific fix suggestions:
+            
+            Bug Title: {title}
+            Bug Description: {description}
+            Classification: {json.dumps(classification)}
+            
+            {similar_fixes_context}
+            
+            Provide 2-3 specific, actionable fix suggestions in JSON format:
+            [
+                {{
+                    "title": "Fix suggestion title",
+                    "description": "Detailed fix steps",
+                    "confidence": 0.85,
+                    "estimated_time": "2-4 hours",
+                    "risk_level": "low|medium|high",
+                    "code_example": "Optional code snippet"
+                }}
+            ]
+            
+            Focus on:
+            1. Root cause analysis
+            2. Specific implementation steps
+            3. Potential side effects
+            4. Testing recommendations
+            """
+            
+            response = self.model.generate_content(prompt)
+            result_text = response.text.strip()
+            
+            # Clean up JSON response
+            if result_text.startswith('```json'):
+                result_text = result_text[7:-3]
+            elif result_text.startswith('```'):
+                result_text = result_text[3:-3]
+            
+            suggestions = json.loads(result_text)
+            
+            # Add source information
+            for suggestion in suggestions:
+                suggestion['source'] = 'AI Analysis'
+            
+            return suggestions
+            
+        except Exception as e:
+            print(f"Error getting AI suggestions: {e}")
+            return []
+    
+    def _get_rule_based_suggestions(self, classification: Dict) -> List[Dict]:
+        """Get rule-based suggestions based on classification"""
+        suggestions = []
+        categories = classification.get('categories', [])
+        severity = classification.get('severity', 'medium')
+        
+        rule_based_fixes = {
+            'ui': {
+                'title': 'UI Component Review',
+                'description': 'Check CSS conflicts, JavaScript event handlers, and cross-browser compatibility',
+                'confidence': 0.7,
+                'estimated_time': '1-3 hours',
+                'risk_level': 'low'
+            },
+            'database': {
+                'title': 'Database Optimization',
+                'description': 'Review query performance, check indexes, and monitor connection pools',
+                'confidence': 0.8,
+                'estimated_time': '2-6 hours',
+                'risk_level': 'medium'
+            },
+            'authentication': {
+                'title': 'Authentication Flow Review',
+                'description': 'Verify token handling, session management, and security protocols',
+                'confidence': 0.75,
+                'estimated_time': '2-4 hours',
+                'risk_level': 'high'
+            },
+            'performance': {
+                'title': 'Performance Optimization',
+                'description': 'Profile application, optimize queries, implement caching strategies',
+                'confidence': 0.7,
+                'estimated_time': '4-8 hours',
+                'risk_level': 'medium'
+            },
+            'security': {
+                'title': 'Security Audit',
+                'description': 'Conduct security review, update dependencies, implement security best practices',
+                'confidence': 0.9,
+                'estimated_time': '4-12 hours',
+                'risk_level': 'high'
+            }
+        }
+        
+        for category in categories:
+            if category in rule_based_fixes:
+                fix = rule_based_fixes[category].copy()
+                fix['source'] = 'Best Practices'
+                suggestions.append(fix)
+        
+        # Add severity-specific suggestions
+        if severity == 'critical':
+            suggestions.append({
+                'title': 'Immediate Hotfix Deployment',
+                'description': 'Create hotfix branch, implement minimal viable fix, deploy to production',
+                'confidence': 0.9,
+                'estimated_time': '1-2 hours',
+                'risk_level': 'low',
+                'source': 'Critical Process'
+            })
+        
+        return suggestions
+    
+    def _deduplicate_suggestions(self, suggestions: List[Dict]) -> List[Dict]:
+        """Remove duplicate suggestions based on title similarity"""
+        unique_suggestions = []
+        seen_titles = set()
+        
+        for suggestion in suggestions:
+            title_lower = suggestion['title'].lower()
+            if title_lower not in seen_titles:
+                seen_titles.add(title_lower)
+                unique_suggestions.append(suggestion)
+        
+        return unique_suggestions
+    
+    def update_embeddings(self, training_data: List[Dict]):
+        """Update vector database with new training data"""
+        try:
+            new_fixes = []
+            for i, item in enumerate(training_data):
+                if 'resolution' in item and item.get('status') == 'resolved':
+                    fix_data = {
+                        'id': f"fix_{len(training_data)}_{i}",
+                        'title': item['title'],
+                        'description': item['description'],
+                        'fix': item.get('resolution', 'Resolution details not available'),
+                        'category': item['classification']['categories'][0] if item['classification']['categories'] else 'general',
+                        'resolution_time': item.get('resolution_time', 'Unknown')
+                    }
+                    new_fixes.append(fix_data)
+            
+            if new_fixes:
+                self._add_fixes_to_db(new_fixes)
+                return True
+                
+        except Exception as e:
+            print(f"Error updating embeddings: {e}")
+            
+        return False
+
+
+# github_integration.py - GitHub Issues Integration
+import requests
+from typing import List, Dict
+import json
+from datetime import datetime
+
+class GitHubIntegration:
+    def __init__(self, token: str = None):
+        self.token = token
+        self.headers = {
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'Bug-Triage-Tool'
+        }
+        
+        if token:
+            self.headers['Authorization'] = f'token {token}'
+    
+    def fetch_issues(self, repo_url: str, state: str = 'all', labels: str = '') -> List[Dict]:
+        """Fetch issues from GitHub repository"""
+        try:
+            # Parse repository URL
+            repo_path = self._parse_repo_url(repo_url)
+            if not repo_path:
+                raise ValueError("Invalid GitHub repository URL")
+            
+            # Build API URL
+            api_url = f"https://api.github.com/repos/{repo_path}/issues"
+            params = {
+                'state': state,
+                'per_page': 100,
+                'sort': 'created',
+                'direction': 'desc'
+            }
+            
+            if labels:
+                params['labels'] = labels
+            
+            response = requests.get(api_url, headers=self.headers, params=params)
+            response.raise_for_status()
+            
+            issues = response.json()
+            
+            # Filter out pull requests (GitHub treats PRs as issues)
+            bug_issues = []
+            for issue in issues:
+                if 'pull_request' not in issue:
+                    bug_issues.append({
+                        'id': issue['id'],
+                        'number': issue['number'],
+                        'title': issue['title'],
+                        'body': issue['body'],
+                        'state': issue['state'],
+                        'labels': [label['name'] for label in issue['labels']],
+                        'created_at': issue['created_at'],
+                        'updated_at': issue['updated_at'],
+                        'assignees': [assignee['login'] for assignee in issue['assignees']],
+                        'url': issue['html_url']
+                    })
+            
+            return bug_issues
+            
+        except Exception as e:
+            print(f"Error fetching GitHub issues: {e}")
+            return []
+    
+    def _parse_repo_url(self, repo_url: str) -> str:
+        """Parse GitHub repository URL to extract owner/repo"""
+        if 'github.com/' in repo_url:
+            parts = repo_url.split('github.com/')[-1].split('/')
+            if len(parts) >= 2:
+                return f"{parts[0]}/{parts[1]}"
+        return ""
+    
+    def create_issue(self, repo_path: str, title: str, body: str, labels: List[str] = None) -> Dict:
+        """Create a new GitHub issue"""
+        if not self.token:
+            raise ValueError("GitHub token required to create issues")
+        
+        api_url = f"https://api.github.com/repos/{repo_path}/issues"
+        data = {
+            'title': title,
+            'body': body
+        }
+        
+        if labels:
+            data['labels'] = labels
+        
+        response = requests.post(api_url, headers=self.headers, json=data)
+        response.raise_for_status()
+        
+        return response.json()
+
+
+# database_manager.py - Database Management
+import sqlite3
+import json
+from datetime import datetime, timedelta
+from typing import Dict, List
+import pandas as pd
+
+class DatabaseManager:
+    def __init__(self, db_path: str = 'bug_triage.db'):
+        self.db_path = db_path
+        self._init_database()
+    
+    def _init_database(self):
+        """Initialize the database with required tables"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Create bugs table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bugs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                environment TEXT,
+                component TEXT,
+                classification TEXT,
+                status TEXT DEFAULT 'open',
+                source TEXT DEFAULT 'manual',
+                github_id INTEGER,
+                resolution TEXT,
+                resolution_time INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create analytics table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS analytics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date DATE,
+                total_bugs INTEGER,
+                resolved_bugs INTEGER,
+                avg_resolution_time REAL,
+                severity_distribution TEXT,
+                category_distribution TEXT
+            )
+        ''')
+        
+        conn.commit()
+        conn.close()
+    
+    def store_bug(self, bug_data: Dict) -> int:
+        """Store a bug report in the database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO bugs (title, description, environment, component, classification, 
+                            source, github_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            bug_data['title'],
+            bug_data['description'],
+            bug_data.get('environment', ''),
+            bug_data.get('component', ''),
+            json.dumps(bug_data.get('classification', {})),
+            bug_data.get('source', 'manual'),
+            bug_data.get('github_id'),
+            bug_data.get('timestamp', datetime.now().isoformat())
+        ))
+        
+        bug_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return bug_id
+    
+    def get_statistics(self) -> Dict:
+        """Get comprehensive statistics about bugs"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Total bugs
+        cursor.execute('SELECT COUNT(*) FROM bugs')
+        total_bugs = cursor.fetchone()[0]
+        
+        # Resolved bugs
+        cursor.execute('SELECT COUNT(*) FROM bugs WHERE status = "resolved"')
+        resolved_bugs = cursor.fetchone()[0]
+        
+        # Average resolution time
+        cursor.execute('''
+            SELECT AVG(resolution_time) FROM bugs 
+            WHERE status = "resolved" AND resolution_time IS NOT NULL
+        ''')
+        avg_resolution_time = cursor.fetchone()[0] or 0
+        
+        # Severity distribution
+        cursor.execute('SELECT classification FROM bugs WHERE classification IS NOT NULL')
+        classifications = cursor.fetchall()
+        
+        severity_dist = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
+        category_dist = {}
+        
+        for (classification_str,) in classifications:
+            try:
+                classification = json.loads(classification_str)
+                severity = classification.get('severity', 'medium')
+                if severity in severity_dist:
+                    severity_dist[severity] += 1
+                
+                categories = classification.get('categories', [])
+                for category in categories:
+                    category_dist[category] = category_dist.get(category, 0) + 1
+            except:
+                continue
+        
+        # Recent trends (last 30 days)
+        thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat()
+        cursor.execute('''
+            SELECT COUNT(*) FROM bugs WHERE created_at >= ?
+        ''', (thirty_days_ago,))
+        recent_bugs = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return {
+            'total_bugs': total_bugs,
+            'resolved_bugs': resolved_bugs,
+            'resolution_rate': (resolved_bugs / total_bugs * 100) if total_bugs > 0 else 0,
+            'avg_resolution_time_hours': round(avg_resolution_time / 3600, 1) if avg_resolution_time else 0,
+            'severity_distribution': severity_dist,
+            'category_distribution': category_dist,
+            'recent_bugs_30_days': recent_bugs,
+            'accuracy_estimate': min(95, 70 + (resolved_bugs / max(total_bugs, 1)) * 25)
+        }
+    
+    def get_training_data(self) -> List[Dict]:
+        """Get data for model training"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT title, description, classification, status, resolution, resolution_time
+            FROM bugs
+            WHERE classification IS NOT NULL
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        training_data = []
+        for row in rows:
+            try:
+                classification = json.loads(row[2]) if row[2] else {}
+                training_data.append({
+                    'title': row[0],
+                    'description': row[1],
+                    'classification': classification,
+                    'status': row[3],
+                    'resolution': row[4],
+                    'resolution_time': row[5]
+                })
+            except:
+                continue
+        
+        return training_data
+    
+    def update_bug_status(self, bug_id: int, status: str, resolution: str = None) -> bool:
+        """Update bug status and resolution"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if status == 'resolved' and resolution:
+            cursor.execute('''
+                UPDATE bugs 
+                SET status = ?, resolution = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (status, resolution, bug_id))
+        else:
+            cursor.execute('''
+                UPDATE bugs 
+                SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (status, bug_id))
+        
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        
+        return success
+
+
+# config.py - Configuration Management
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Config:
+    # API Keys
+    GOOGLE_AI_API_KEY = os.getenv('GOOGLE_AI_API_KEY', 'AIzaSyCnW8I41ZJsGUIIayF7lCEE5VuwjE-0fuE')
+    GITHUB_TOKEN = os.getenv('GITHUB_TOKEN', '')  # Optional for private repos
+    
+    # Database
+    DATABASE_URL = os.getenv('DATABASE_URL', 'bug_triage.db')
+    
+    # Model Settings
+    MODEL_NAME = 'gemini-pro'
+    EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
+    
+    # Application Settings
+    DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+    HOST = os.getenv('HOST', '0.0.0.0')
+    PORT = int(os.getenv('PORT', 5000))
+    
+    # Vector Database
+    CHROMA_PERSIST_DIRECTORY = os.getenv('CHROMA_PERSIST_DIRECTORY', './chroma_db')
+
+
+# utils.py - Utility Functions
+import re
+import string
+from typing import List, Dict
+import numpy as np
+from datetime import datetime
+
+def preprocess_text(text: str) -> str:
+    """Clean and preprocess text for analysis"""
+    if not text:
+        return ""
+    
+    # Convert to lowercase
+    text = text.lower()
+    
+    # Remove URLs
+    text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
+    
+    # Remove special characters but keep spaces
+    text = re.sub(r'[^\w\s]', ' ', text)
+    
+    # Remove extra whitespace
+    text = ' '.join(text.split())
+    
+    return text
+
+def extract_stack_trace(text: str) -> str:
+    """Extract stack trace from bug description"""
+    stack_trace_patterns = [
+        r'at\s+[\w\.]+\([^)]+\)',  # Java/JavaScript stack traces
+        r'File\s+"[^"]+",\s+line\s+\d+',  # Python stack traces
+        r'#\d+\s+0x[0-9a-fA-F]+\s+in\s+\w+',  # C/C++ stack traces
+    ]
+    
+    for pattern in stack_trace_patterns:
+        matches = re.findall(pattern, text, re.MULTILINE)
+        if matches:
+            return '\n'.join(matches[:5])  # Return first 5 lines
+    
+    return ""
+
+def calculate_text_similarity(text1: str, text2: str) -> float:
+    """Calculate simple text similarity using Jaccard similarity"""
+    if not text1 or not text2:
+        return 0.0
+    
+    # Tokenize and clean
+    tokens1 = set(preprocess_text(text1).split())
+    tokens2 = set(preprocess_text(text2).split())
+    
+    # Calculate Jaccard similarity
+    intersection = len(tokens1.intersection(tokens2))
+    union = len(tokens1.union(tokens2))
+    
+    return intersection / union if union > 0 else 0.0
+
+def extract_keywords(text: str, max_keywords: int = 10) -> List[str]:
+    """Extract important keywords from text"""
+    # Common stop words
+    stop_words = {
+        'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 
+        'of', 'with', 'by', 'is', 'are', 'was', 'were', 'been', 'be', 'have', 
+        'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could',
+        'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 
+        'they', 'me', 'him', 'her', 'us', 'them'
+    }
+    
+    # Technical keywords that are important
+    tech_keywords = {
+        'error', 'exception', 'bug', 'issue', 'problem', 'fail', 'crash', 
+        'timeout', 'memory', 'database', 'api', 'server', 'client', 'browser',
+        'login', 'authentication', 'validation', 'security', 'performance'
+    }
+    
+    words = preprocess_text(text).split()
+    word_freq = {}
+    
+    for word in words:
+        if len(word) > 2 and word not in stop_words:
+            # Give higher weight to technical keywords
+            weight = 2 if word in tech_keywords else 1
+            word_freq[word] = word_freq.get(word, 0) + weight
+    
+    # Sort by frequency and return top keywords
+    sorted_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
+    return [word for word, freq in sorted_words[:max_keywords]]
+
+def format_time_estimate(hours: float) -> str:
+    """Format time estimate in human-readable format"""
+    if hours < 1:
+        return f"{int(hours * 60)} minutes"
+    elif hours < 8:
+        return f"{hours:.1f} hours"
+    else:
+        days = hours / 8
+        return f"{days:.1f} days"
+
+def validate_bug_data(data: Dict) -> List[str]:
+    """Validate bug report data and return list of errors"""
+    errors = []
+    
+    if not data.get('title', '').strip():
+        errors.append("Title is required")
+    
+    if not data.get('description', '').strip():
+        errors.append("Description is required")
+    
+    if len(data.get('title', '')) > 200:
+        errors.append("Title must be less than 200 characters")
+    
+    if len(data.get('description', '')) > 10000:
+        errors.append("Description must be less than 10,000 characters")
+    
+    return errors
+
+
+# Enhanced Frontend with Backend Integration
+enhanced_frontend = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Bug Triage System</title>
+    <style>
+        /* Enhanced styles with glassmorphism and modern design */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="%23ffffff" stroke-width="0.5" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .header h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 16px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header .subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.3rem;
+            font-weight: 400;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 32px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-title {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .form-input::placeholder,
+        .form-textarea::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 120px;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 18px 36px;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 100%;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .results-empty {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            padding: 60px 20px;
+            font-size: 1.1rem;
+        }
+
+        .result-item {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+            backdrop-filter: blur(10px);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .result-title {
+            color: white;
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        .severity-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .severity-critical {
+            background: linear-gradient(135deg, #ff4757, #ff3742);
+            color: white;
+        }
+
+        .severity-high {
+            background: linear-gradient(135deg, #ffa502, #ff6348);
+            color: white;
+        }
+
+        .severity-medium {
+            background: linear-gradient(135deg, #3742fa, #2f3542);
+            color: white;
+        }
+
+        .severity-low {
+            background: linear-gradient(135deg, #2ed573, #1e90ff);
+            color: white;
+        }
+
+        .category-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 12px 0;
+        }
+
+        .category-tag {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .fix-suggestions {
+            margin-top: 20px;
+        }
+
+        .fix-item {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .fix-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;             margin-bottom: 12px;
+        }
+
+        .fix-title {
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .confidence-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .confidence-bar {
+            width: 60px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2ed573, #1e90ff);
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fix-description {
+            color: rgba(255, 255, 255, 0.9);
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .fix-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .github-section {
+            margin-top: 40px;
+            padding: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .github-form {
+            display: flex;
+            gap: 16px;
+            align-items: end;
+        }
+
+        .github-input-group {
+            flex: 1;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .github-form {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 2.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 AI Bug Triage System</h1>
+            <p class="subtitle">Intelligent bug classification and fix suggestions powered by Google AI</p>
+        </div>
+
+        <div class="main-grid">
+            <div class="card">
+                <h3 class="card-title">
+                    🐛 Submit Bug Report
+                </h3>
+                <form id="bugForm">
+                    <div class="form-group">
+                        <label class="form-label" for="title">Bug Title *</label>
+                        <input type="text" id="title" class="form-input" placeholder="Brief description of the issue" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="description">Detailed Description *</label>
+                        <textarea id="description" class="form-textarea" placeholder="Describe the bug in detail: steps to reproduce, expected vs actual behavior, error messages..." required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="environment">Environment</label>
+                        <input type="text" id="environment" class="form-input" placeholder="OS, browser, version, device info...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="component">Component/Module</label>
+                        <select id="component" class="form-select">
+                            <option value="">Select component</option>
+                            <option value="frontend">Frontend</option>
+                            <option value="backend">Backend</option>
+                            <option value="database">Database</option>
+                            <option value="api">API</option>
+                            <option value="authentication">Authentication</option>
+                            <option value="ui">User Interface</option>
+                            <option value="performance">Performance</option>
+                            <option value="security">Security</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary" id="analyzeBtn">
+                        🤖 Analyze with AI
+                    </button>
+                </form>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">
+                    📊 Analysis Results
+                </h3>
+                <div id="results">
+                    <div class="results-empty">
+                        Submit a bug report to see AI-powered analysis, classification, and fix suggestions
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="github-section">
+            <h3 class="card-title">
+                🔗 GitHub Integration
+            </h3>
+            <p style="color: rgba(255, 255, 255, 0.8); margin-bottom: 20px;">
+                Import bugs from GitHub repositories to enhance the AI model
+            </p>
+            <div class="github-form">
+                <div class="github-input-group">
+                    <label class="form-label" for="repoUrl">Repository URL</label>
+                    <input type="url" id="repoUrl" class="form-input" placeholder="https://github.com/owner/repository">
+                </div>
+                <button type="button" class="btn-secondary" id="syncBtn">
+                    Sync Issues
+                </button>
+            </div>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalBugs">-</div>
+                <div class="stat-label">Total Bugs Analyzed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="resolvedBugs">-</div>
+                <div class="stat-label">Successfully Resolved</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="accuracy">-</div>
+                <div class="stat-label">AI Accuracy Rate</div>
+            </div>
+            <div class="stat-json()
+    
+    def update_issue(self, repo_path: str, issue_number: int, **kwargs) -> Dict:
+        """Update an existing GitHub issue"""
+        if not self.token:
+            raise ValueError("GitHub token required to update issues")
+        
+        api_url = f"https://api.github.com/repos/{repo_path}/issues/{issue_number}"
+        
+        response = requests.patch(api_url, headers=self.headers, json=kwargs)
+        response.raise_for_status()
+        
+        return response.
