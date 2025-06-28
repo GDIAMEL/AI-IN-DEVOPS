@@ -1,10 +1,12 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Bug Triage Tool</title>
+    <title>AI Bug Triage System</title>
     <style>
+        /* Enhanced styles with glassmorphism and modern design */
         * {
             margin: 0;
             padding: 0;
@@ -12,247 +14,411 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
             min-height: 100vh;
             padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="%23ffffff" stroke-width="0.5" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            pointer-events: none;
+            z-index: -1;
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 50px;
         }
 
         .header h1 {
-            color: #333;
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            background: linear-gradient(45deg, #667eea, #764ba2);
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            margin-bottom: 16px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
-        .header p {
-            color: #666;
-            font-size: 1.1rem;
+        .header .subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1.3rem;
+            font-weight: 400;
         }
 
-        .main-content {
+        .main-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
+            gap: 40px;
+            margin-bottom: 40px;
         }
 
-        .input-section {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 15px;
-            border: 2px solid #e9ecef;
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 32px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .results-section {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 15px;
-            border: 2px solid #e9ecef;
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-title {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
-        label {
+        .form-label {
             display: block;
-            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.9);
             font-weight: 600;
-            color: #333;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
         }
 
-        input, textarea, select {
+        .form-input,
+        .form-textarea,
+        .form-select {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 1rem;
             transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
         }
 
-        input:focus, textarea:focus, select:focus {
+        .form-input::placeholder,
+        .form-textarea::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            border-color: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
         }
 
-        textarea {
+        .form-textarea {
             resize: vertical;
             min-height: 120px;
+            font-family: inherit;
         }
 
-        .analyze-btn {
-            background: linear-gradient(45deg, #667eea, #764ba2);
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 15px 30px;
-            border-radius: 8px;
-            font-size: 16px;
+            padding: 18px 36px;
+            border-radius: 12px;
+            font-size: 1.1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             width: 100%;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+            position: relative;
+            overflow: hidden;
         }
 
-        .analyze-btn:hover {
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
         }
 
-        .analyze-btn:disabled {
+        .btn-primary:disabled {
             opacity: 0.6;
             cursor: not-allowed;
             transform: none;
         }
 
-        .result-card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 15px;
+        .results-empty {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            padding: 60px 20px;
+            font-size: 1.1rem;
+        }
+
+        .result-item {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
             border-left: 4px solid #667eea;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            backdrop-filter: blur(10px);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
         }
 
         .result-title {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 10px;
+            color: white;
+            font-size: 1.3rem;
+            font-weight: 700;
         }
 
         .severity-badge {
-            display: inline-block;
-            padding: 5px 12px;
+            padding: 6px 16px;
             border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
+            font-size: 0.8rem;
+            font-weight: 700;
             text-transform: uppercase;
-            margin-bottom: 10px;
+            letter-spacing: 0.5px;
         }
 
-        .severity-critical { background: #fee; color: #c53030; }
-        .severity-high { background: #fef5e7; color: #d69e2e; }
-        .severity-medium { background: #edf2f7; color: #4a5568; }
-        .severity-low { background: #f0fff4; color: #38a169; }
+        .severity-critical {
+            background: linear-gradient(135deg, #ff4757, #ff3742);
+            color: white;
+        }
+
+        .severity-high {
+            background: linear-gradient(135deg, #ffa502, #ff6348);
+            color: white;
+        }
+
+        .severity-medium {
+            background: linear-gradient(135deg, #3742fa, #2f3542);
+            color: white;
+        }
+
+        .severity-low {
+            background: linear-gradient(135deg, #2ed573, #1e90ff);
+            color: white;
+        }
+
+        .category-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 12px 0;
+        }
 
         .category-tag {
-            display: inline-block;
-            background: #e2e8f0;
-            color: #4a5568;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            margin-right: 5px;
-            margin-bottom: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
         }
 
         .fix-suggestions {
-            background: #f7fafc;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 10px;
-            border-left: 3px solid #38a169;
+            margin-top: 20px;
         }
 
-        .fix-suggestion {
-            background: white;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            border: 1px solid #e2e8f0;
+        .fix-item {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .fix-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .fix-title {
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .confidence-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .confidence-bar {
-            width: 100%;
+            width: 60px;
             height: 6px;
-            background: #e2e8f0;
+            background: rgba(255, 255, 255, 0.2);
             border-radius: 3px;
-            margin-top: 8px;
             overflow: hidden;
         }
 
         .confidence-fill {
             height: 100%;
-            background: linear-gradient(90deg, #38a169, #68d391);
-            transition: width 0.5s ease;
+            background: linear-gradient(90deg, #2ed573, #1e90ff);
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .loading {
+        .fix-description {
+            color: rgba(255, 255, 255, 0.9);
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .fix-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 24px;
             text-align: center;
-            padding: 40px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease;
         }
 
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
         }
 
-        .historical-data {
-            margin-top: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 15px;
+        .github-section {
+            margin-top: 40px;
+            padding: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
-        .data-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
+        .github-form {
+            display: flex;
+            gap: 16px;
+            align-items: end;
         }
 
-        .data-card {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            border: 1px solid #e2e8f0;
+        .github-input-group {
+            flex: 1;
         }
 
-        .data-number {
-            font-size: 2rem;
-            font-weight: bold;
-            color: #667eea;
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
         }
 
-        .data-label {
-            color: #666;
-            font-size: 0.9rem;
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
         }
 
         @media (max-width: 768px) {
-            .main-content {
+            .main-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .github-form {
+                flex-direction: column;
+            }
+
+            .header h1 {
+                font-size: 2.5rem;
             }
         }
     </style>
@@ -260,370 +426,290 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1> AI Bug Triage Tool</h1>
-            <p>Intelligent bug classification and fix suggestions powered by AI</p>
+            <h1>🔧 AI Bug Triage System</h1>
+            <p class="subtitle">Intelligent bug classification and fix suggestions powered by Google AI</p>
         </div>
 
-        <div class="main-content">
-            <div class="input-section">
-                <h3 style="margin-bottom: 20px; color: #333;">Submit Bug Report</h3>
+        <div class="main-grid">
+            <div class="card">
+                <h3 class="card-title">
+                    🐛 Submit Bug Report
+                </h3>
                 <form id="bugForm">
                     <div class="form-group">
-                        <label for="title">Bug Title</label>
-                        <input type="text" id="title" placeholder="Brief description of the bug">
+                        <label class="form-label" for="title">Bug Title *</label>
+                        <input type="text" id="title" class="form-input" placeholder="Brief description of the issue" required>
                     </div>
-                    
+
                     <div class="form-group">
-                        <label for="description">Bug Description</label>
-                        <textarea id="description" placeholder="Detailed description of the bug, steps to reproduce, expected vs actual behavior..."></textarea>
+                        <label class="form-label" for="description">Detailed Description *</label>
+                        <textarea id="description" class="form-textarea" placeholder="Describe the bug in detail: steps to reproduce, expected vs actual behavior, error messages..." required></textarea>
                     </div>
-                    
+
                     <div class="form-group">
-                        <label for="environment">Environment</label>
-                        <input type="text" id="environment" placeholder="OS, browser, version, etc.">
+                        <label class="form-label" for="environment">Environment</label>
+                        <input type="text" id="environment" class="form-input" placeholder="OS, browser, version, device info...">
                     </div>
-                    
+
                     <div class="form-group">
-                        <label for="component">Component/Module</label>
-                        <select id="component">
+                        <label class="form-label" for="component">Component/Module</label>
+                        <select id="component" class="form-select">
                             <option value="">Select component</option>
                             <option value="frontend">Frontend</option>
                             <option value="backend">Backend</option>
                             <option value="database">Database</option>
                             <option value="api">API</option>
-                            <option value="auth">Authentication</option>
+                            <option value="authentication">Authentication</option>
                             <option value="ui">User Interface</option>
                             <option value="performance">Performance</option>
                             <option value="security">Security</option>
                         </select>
                     </div>
-                    
-                    <button type="submit" class="analyze-btn" id="analyzeBtn">
-                         Analyze Bug Report
+
+                    <button type="submit" class="btn-primary" id="analyzeBtn">
+                        🤖 Analyze with AI
                     </button>
                 </form>
             </div>
 
-            <div class="results-section">
-                <h3 style="margin-bottom: 20px; color: #333;">Analysis Results</h3>
+            <div class="card">
+                <h3 class="card-title">
+                    📊 Analysis Results
+                </h3>
                 <div id="results">
-                    <div style="text-align: center; color: #666; padding: 40px;">
-                        Submit a bug report to see AI-powered analysis and suggestions
+                    <div class="results-empty">
+                        Submit a bug report to see AI-powered analysis, classification, and fix suggestions
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="historical-data">
-            <h3 style="margin-bottom: 15px; color: #333;"> Bug Database Statistics</h3>
-            <div class="data-grid">
-                <div class="data-card">
-                    <div class="data-number" id="totalBugs">1,247</div>
-                    <div class="data-label">Total Bugs Analyzed</div>
+        <div class="github-section">
+            <h3 class="card-title">
+                🔗 GitHub Integration
+            </h3>
+            <p style="color: rgba(255, 255, 255, 0.8); margin-bottom: 20px;">
+                Import bugs from GitHub repositories to enhance the AI model
+            </p>
+            <div class="github-form">
+                <div class="github-input-group">
+                    <label class="form-label" for="repoUrl">Repository URL</label>
+                    <input type="url" id="repoUrl" class="form-input" placeholder="https://github.com/owner/repository">
                 </div>
-                <div class="data-card">
-                    <div class="data-number" id="resolvedBugs">892</div>
-                    <div class="data-label">Successfully Resolved</div>
-                </div>
-                <div class="data-card">
-                    <div class="data-number" id="accuracy">94%</div>
-                    <div class="data-label">Classification Accuracy</div>
-                </div>
-                <div class="data-card">
-                    <div class="data-number" id="avgTime">2.3h</div>
-                    <div class="data-label">Avg Resolution Time</div>
-                </div>
+                <button type="button" class="btn-secondary" id="syncBtn">
+                    Sync Issues
+                </button>
+            </div>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalBugs">-</div>
+                <div class="stat-label">Total Bugs Analyzed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="resolvedBugs">-</div>
+                <div class="stat-label">Successfully Resolved</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="accuracy">-</div>
+                <div class="stat-label">AI Accuracy Rate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="avgTime">-</div>
+                <div class="stat-label">Avg Resolution Time</div>
             </div>
         </div>
     </div>
 
     <script>
-        // Simulated historical bug data for training/reference
-        const historicalBugs = [
-            {
-                title: "Login form validation error",
-                description: "Email validation fails with valid email addresses containing plus signs",
-                category: "validation",
-                severity: "medium",
-                fix: "Update email regex pattern to include plus signs: /^[^\\s@]+\\+?[^\\s@]*@[^\\s@]+\\.[^\\s@]+$/",
-                component: "auth"
-            },
-            {
-                title: "Database connection timeout",
-                description: "Connection pool exhausted during high traffic periods",
-                category: "performance",
-                severity: "high",
-                fix: "Increase connection pool size and implement connection retry logic with exponential backoff",
-                component: "database"
-            },
-            {
-                title: "UI button not responsive",
-                description: "Submit button becomes unclickable after form validation fails",
-                category: "ui",
-                severity: "medium",
-                fix: "Remove disabled attribute after validation and re-enable event listeners",
-                component: "frontend"
-            },
-            {
-                title: "Memory leak in file upload",
-                description: "Memory usage increases with each file upload and doesn't decrease",
-                category: "memory",
-                severity: "high",
-                fix: "Properly dispose of file readers and clear blob URLs after processing",
-                component: "frontend"
-            },
-            {
-                title: "API rate limiting too aggressive",
-                description: "Users getting rate limited with normal usage patterns",
-                category: "api",
-                severity: "medium",
-                fix: "Implement sliding window rate limiting instead of fixed window",
-                component: "api"
-            }
-        ];
+        const API_BASE = 'http://localhost:5000/api';
 
-        // Simple NLP-like classification using keyword matching
-        function classifyBug(title, description, component) {
-            const text = (title + " " + description).toLowerCase();
-            
-            // Severity classification
-            let severity = "low";
-            if (text.includes("crash") || text.includes("error") || text.includes("fail") || 
-                text.includes("timeout") || text.includes("memory leak") || text.includes("security")) {
-                severity = "high";
-            } else if (text.includes("slow") || text.includes("validation") || text.includes("ui") || 
-                       text.includes("display") || text.includes("format")) {
-                severity = "medium";
-            }
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStatistics();
 
-            // Category classification
-            let categories = [];
-            if (text.includes("login") || text.includes("auth") || text.includes("password")) categories.push("authentication");
-            if (text.includes("ui") || text.includes("button") || text.includes("display") || text.includes("layout")) categories.push("ui");
-            if (text.includes("database") || text.includes("query") || text.includes("connection")) categories.push("database");
-            if (text.includes("api") || text.includes("endpoint") || text.includes("request")) categories.push("api");
-            if (text.includes("performance") || text.includes("slow") || text.includes("timeout")) categories.push("performance");
-            if (text.includes("validation") || text.includes("input") || text.includes("form")) categories.push("validation");
-            if (text.includes("memory") || text.includes("leak") || text.includes("cpu")) categories.push("performance");
-            if (text.includes("security") || text.includes("vulnerability") || text.includes("xss")) categories.push("security");
+            // Bug form submission
+            document.getElementById('bugForm').addEventListener('submit', handleBugSubmission);
 
-            if (categories.length === 0) categories.push("general");
-            if (component) categories.push(component);
+            // GitHub sync
+            document.getElementById('syncBtn').addEventListener('click', handleGitHubSync);
+        });
 
-            return { severity, categories: [...new Set(categories)] };
-        }
-
-        // Find similar bugs and suggest fixes
-        function findSimilarBugs(title, description, categories) {
-            const text = (title + " " + description).toLowerCase();
-            
-            return historicalBugs
-                .map(bug => {
-                    let similarity = 0;
-                    
-                    // Check for common keywords
-                    const bugText = (bug.title + " " + bug.description).toLowerCase();
-                    const commonWords = text.split(" ").filter(word => 
-                        word.length > 3 && bugText.includes(word)
-                    );
-                    similarity += commonWords.length * 0.2;
-                    
-                    // Check category overlap
-                    if (categories.includes(bug.category)) similarity += 0.4;
-                    if (categories.includes(bug.component)) similarity += 0.3;
-                    
-                    return { ...bug, similarity };
-                })
-                .filter(bug => bug.similarity > 0.3)
-                .sort((a, b) => b.similarity - a.similarity)
-                .slice(0, 3);
-        }
-
-        // Generate AI-powered fix suggestions
-        function generateFixSuggestions(title, description, categories, similarBugs) {
-            const suggestions = [];
-            
-            // Add suggestions from similar bugs
-            similarBugs.forEach(bug => {
-                suggestions.push({
-                    title: `Similar Issue Resolution`,
-                    description: bug.fix,
-                    confidence: Math.round(bug.similarity * 100),
-                    source: "Historical Data"
-                });
-            });
-
-            // Add general suggestions based on categories
-            categories.forEach(category => {
-                switch(category) {
-                    case "validation":
-                        suggestions.push({
-                            title: "Input Validation Enhancement",
-                            description: "Review and update validation rules, ensure proper sanitization and error handling",
-                            confidence: 75,
-                            source: "Best Practices"
-                        });
-                        break;
-                    case "performance":
-                        suggestions.push({
-                            title: "Performance Optimization",
-                            description: "Profile the application, optimize database queries, implement caching strategies",
-                            confidence: 70,
-                            source: "Best Practices"
-                        });
-                        break;
-                    case "ui":
-                        suggestions.push({
-                            title: "UI/UX Review",
-                            description: "Test across different browsers and devices, check CSS conflicts and JavaScript event handlers",
-                            confidence: 80,
-                            source: "Best Practices"
-                        });
-                        break;
-                    case "database":
-                        suggestions.push({
-                            title: "Database Health Check",
-                            description: "Monitor connection pools, check for long-running queries, verify index usage",
-                            confidence: 85,
-                            source: "Best Practices"
-                        });
-                        break;
-                }
-            });
-
-            return suggestions.slice(0, 4); // Limit to top 4 suggestions
-        }
-
-        document.getElementById('bugForm').addEventListener('submit', async function(e) {
+        async function handleBugSubmission(e) {
             e.preventDefault();
-            
-            const title = document.getElementById('title').value;
-            const description = document.getElementById('description').value;
-            const environment = document.getElementById('environment').value;
-            const component = document.getElementById('component').value;
-            
-            if (!title || !description) {
-                alert('Please fill in at least the title and description');
+
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            const originalText = analyzeBtn.innerHTML;
+
+            // Show loading state
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<span class="loading-spinner"></span> Analyzing...';
+
+            try {
+                const formData = {
+                    title: document.getElementById('title').value,
+                    description: document.getElementById('description').value,
+                    environment: document.getElementById('environment').value,
+                    component: document.getElementById('component').value
+                };
+
+                const response = await fetch(`${API_BASE}/analyze-bug`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                displayResults(result);
+
+                // Refresh statistics
+                loadStatistics();
+
+            } catch (error) {
+                console.error('Error analyzing bug:', error);
+                displayError('Failed to analyze bug. Please try again.');
+            } finally {
+                // Reset button
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = originalText;
+            }
+        }
+
+        async function handleGitHubSync() {
+            const syncBtn = document.getElementById('syncBtn');
+            const repoUrl = document.getElementById('repoUrl').value;
+
+            if (!repoUrl) {
+                alert('Please enter a GitHub repository URL');
                 return;
             }
 
-            const analyzeBtn = document.getElementById('analyzeBtn');
-            const results = document.getElementById('results');
-            
-            // Show loading state
-            analyzeBtn.disabled = true;
-            analyzeBtn.textContent = 'Analyzing...';
-            results.innerHTML = `
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>AI is analyzing your bug report...</p>
-                </div>
-            `;
+            const originalText = syncBtn.innerHTML;
+            syncBtn.disabled = true;
+            syncBtn.innerHTML = '<span class="loading-spinner"></span> Syncing...';
 
-            // Simulate API delay
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            try {
+                const response = await fetch(`${API_BASE}/github-sync`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ repo_url: repoUrl })
+                });
 
-            // Perform analysis
-            const classification = classifyBug(title, description, component);
-            const similarBugs = findSimilarBugs(title, description, classification.categories);
-            const fixSuggestions = generateFixSuggestions(title, description, classification.categories, similarBugs);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
 
-            // Display results
-            results.innerHTML = `
-                <div class="result-card">
-                    <div class="result-title"> Classification Results</div>
-                    <div class="severity-badge severity-${classification.severity}">
-                        ${classification.severity.toUpperCase()} SEVERITY
+                const result = await response.json();
+                alert(`Successfully synced ${result.processed_count} issues from GitHub!`);
+
+                // Refresh statistics
+                loadStatistics();
+
+            } catch (error) {
+                console.error('Error syncing GitHub issues:', error);
+                alert('Failed to sync GitHub issues. Please check the repository URL and try again.');
+            } finally {
+                syncBtn.disabled = false;
+                syncBtn.innerHTML = originalText;
+            }
+        }
+
+        async function loadStatistics() {
+            try {
+                const response = await fetch(`${API_BASE}/stats`);
+                if (!response.ok) return;
+
+                const stats = await response.json();
+
+                document.getElementById('totalBugs').textContent = stats.total_bugs || 0;
+                document.getElementById('resolvedBugs').textContent = stats.resolved_bugs || 0;
+                document.getElementById('accuracy').textContent = `${Math.round(stats.accuracy_estimate || 0)}%`;
+                document.getElementById('avgTime').textContent = `${stats.avg_resolution_time_hours || 0}h`;
+
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+            }
+        }
+
+        function displayResults(result) {
+            const resultsDiv = document.getElementById('results');
+
+            const html = `
+                <div class="result-item">
+                    <div class="result-header">
+                        <div class="result-title">Bug Analysis Complete</div>
+                        <div class="severity-badge severity-${result.classification.severity}">
+                            ${result.classification.severity.toUpperCase()}
+                        </div>
                     </div>
-                    <div style="margin-top: 10px;">
-                        <strong>Categories:</strong><br>
-                        ${classification.categories.map(cat => 
+
+                    <div class="category-tags">
+                        ${result.classification.categories.map(cat => 
                             `<span class="category-tag">${cat}</span>`
                         ).join('')}
                     </div>
-                </div>
 
-                <div class="result-card">
-                    <div class="result-title"> Fix Suggestions</div>
+                    <div style="margin: 16px 0; color: rgba(255, 255, 255, 0.8);">
+                        <strong>Priority Score:</strong> ${result.classification.priority_score}/100<br>
+                        <strong>Estimated Effort:</strong> ${result.classification.estimated_effort}<br>
+                        <strong>Suggested Team:</strong> ${result.classification.suggested_team}
+                    </div>
+
                     <div class="fix-suggestions">
-                        ${fixSuggestions.map(suggestion => `
-                            <div class="fix-suggestion">
-                                <strong>${suggestion.title}</strong>
-                                <p style="margin: 5px 0; color: #555;">${suggestion.description}</p>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                                    <small style="color: #666;">Source: ${suggestion.source}</small>
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <small>Confidence: ${suggestion.confidence}%</small>
-                                        <div class="confidence-bar" style="width: 60px;">
-                                            <div class="confidence-fill" style="width: ${suggestion.confidence}%"></div>
+                        <h4 style="color: white; margin-bottom: 16px;">🔧 Fix Suggestions</h4>
+                        ${result.fix_suggestions.map(fix => `
+                            <div class="fix-item">
+                                <div class="fix-header">
+                                    <div class="fix-title">${fix.title}</div>
+                                    <div class="confidence-indicator">
+                                        <span style="font-size: 0.8rem;">${Math.round(fix.confidence * 100)}%</span>
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill" style="width: ${fix.confidence * 100}%"></div>
                                         </div>
                                     </div>
+                                </div>
+                                <div class="fix-description">${fix.description}</div>
+                                <div class="fix-meta">
+                                    <span>⏱️ ${fix.estimated_time}</span>
+                                    <span>⚠️ Risk: ${fix.risk_level}</span>
+                                    <span>📋 ${fix.source}</span>
                                 </div>
                             </div>
                         `).join('')}
                     </div>
-                </div>
 
-                ${similarBugs.length > 0 ? `
-                <div class="result-card">
-                    <div class="result-title"> Similar Historical Issues</div>
-                    ${similarBugs.map(bug => `
-                        <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                            <strong>${bug.title}</strong>
-                            <p style="color: #666; font-size: 0.9rem; margin: 5px 0;">${bug.description}</p>
-                            <div style="display: flex; justify-content: between; align-items: center;">
-                                <span class="category-tag">${bug.category}</span>
-                                <small style="color: #666;">Match: ${Math.round(bug.similarity * 100)}%</small>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-                ` : ''}
-
-                <div class="result-card">
-                    <div class="result-title"> Recommended Actions</div>
-                    <ul style="padding-left: 20px; color: #555;">
-                        <li>Assign to ${component || 'appropriate'} team based on component classification</li>
-                        <li>Set priority to ${classification.severity} based on severity analysis</li>
-                        <li>Follow suggested fix approaches from similar resolved issues</li>
-                        <li>Update bug tracking system with AI-generated tags and categories</li>
-                    </ul>
+                    <div style="margin-top: 20px;">
+                        <h4 style="color: white; margin-bottom: 12px;">📋 Recommended Actions</h4>
+                        <ul style="color: rgba(255, 255, 255, 0.9); padding-left: 20px;">
+                            ${result.recommended_actions.map(action => 
+                                `<li style="margin-bottom: 8px;">${action}</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
                 </div>
             `;
 
-            // Reset button
-            analyzeBtn.disabled = false;
-            analyzeBtn.textContent = 'Analyze Bug Report';
+            resultsDiv.innerHTML = html;
+        }
 
-            // Update statistics (simulate)
-            const totalBugs = document.getElementById('totalBugs');
-            totalBugs.textContent = parseInt(totalBugs.textContent.replace(',', '')) + 1;
-        });
-
-        // Add some interactive animations
-        document.addEventListener('DOMContentLoaded', function() {
-            // Animate statistics on load
-            const numbers = document.querySelectorAll('.data-number');
-            numbers.forEach(num => {
-                if (num.textContent.includes('%') || num.textContent.includes('h')) return;
-                
-                const finalValue = parseInt(num.textContent.replace(',', ''));
-                let currentValue = 0;
-                const increment = finalValue / 50;
-                
-                const animate = () => {
-                    currentValue += increment;
-                    if (currentValue < finalValue) {
-                        num.textContent = Math.floor(currentValue).toLocaleString();
-                        requestAnimationFrame(animate);
-                    } else {
-                        num.textContent = finalValue.toLocaleString();
-                    }
-                };
-                
-                setTimeout(() => animate(), Math.random() * 1000);
-            });
-        });
+        function displayError(message) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <div class="result-item" style="border-left-color: #ff4757;">
+                    <div style="color: #ff4757; font-weight: 600; margin-bottom: 8px;">❌ Error</div>
+                    <div style="color: rgba(255, 255, 255, 0.9);">${message}</div>
+                </div>
+            `;
+        }
     </script>
 </body>
 </html>
