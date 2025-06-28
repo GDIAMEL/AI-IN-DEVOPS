@@ -1,0 +1,29 @@
+
+# docker-compose.yml
+version: '3.8'
+
+services:
+  bug-triage-api:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - DEBUG=false
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./chroma_db:/app/chroma_db
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./static:/usr/share/nginx/html
+    depends_on:
+      - bug-triage-api
+    restart: unless-stopped
