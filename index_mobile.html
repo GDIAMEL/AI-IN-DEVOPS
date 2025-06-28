@@ -1,0 +1,1123 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=5.0">
+    <title>AI Bug Triage System</title>
+    <meta name="description" content="Intelligent bug classification and fix suggestions powered by Google AI">
+    <meta name="theme-color" content="#667eea">
+
+    <!-- Preload critical fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* Enhanced mobile-first responsive design */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            --card-bg: rgba(255, 255, 255, 0.15);
+            --card-border: rgba(255, 255, 255, 0.2);
+            --text-primary: white;
+            --text-secondary: rgba(255, 255, 255, 0.8);
+            --text-muted: rgba(255, 255, 255, 0.6);
+            --input-bg: rgba(255, 255, 255, 0.1);
+            --input-border: rgba(255, 255, 255, 0.2);
+            --input-focus: rgba(255, 255, 255, 0.8);
+            --shadow-light: 0 8px 32px rgba(0, 0, 0, 0.1);
+            --shadow-heavy: 0 24px 48px rgba(0, 0, 0, 0.2);
+            --border-radius: 16px;
+            --border-radius-large: 24px;
+            --spacing-xs: 8px;
+            --spacing-sm: 12px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --spacing-2xl: 40px;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--primary-gradient);
+            min-height: 100vh;
+            padding: var(--spacing-md);
+            position: relative;
+            overflow-x: hidden;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Improved background pattern for mobile */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="%23ffffff" stroke-width="0.3" opacity="0.08"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            border-radius: var(--border-radius-large);
+            box-shadow: var(--shadow-heavy);
+            padding: var(--spacing-lg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: var(--spacing-2xl);
+        }
+
+        .header h1 {
+            font-size: clamp(2rem, 8vw, 3.5rem);
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: var(--spacing-md);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            line-height: 1.2;
+        }
+
+        .header .subtitle {
+            color: var(--text-secondary);
+            font-size: clamp(1rem, 4vw, 1.3rem);
+            font-weight: 400;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+            margin-bottom: var(--spacing-2xl);
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            box-shadow: var(--shadow-light);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 100%;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-title {
+            color: var(--text-primary);
+            font-size: clamp(1.2rem, 5vw, 1.5rem);
+            font-weight: 700;
+            margin-bottom: var(--spacing-lg);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            flex-wrap: wrap;
+        }
+
+        .form-group {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .form-label {
+            display: block;
+            color: var(--text-secondary);
+            font-weight: 600;
+            margin-bottom: var(--spacing-xs);
+            font-size: clamp(0.9rem, 3vw, 0.95rem);
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            padding: var(--spacing-md) var(--spacing-md);
+            background: var(--input-bg);
+            border: 2px solid var(--input-border);
+            border-radius: var(--spacing-sm);
+            color: var(--text-primary);
+            font-size: clamp(0.9rem, 4vw, 1rem);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            -webkit-appearance: none;
+            appearance: none;
+            font-family: inherit;
+            line-height: 1.5;
+        }
+
+        /* Improved mobile input styling */
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: var(--input-focus);
+            background: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.1);
+            transform: scale(1.02);
+        }
+
+        .form-input::placeholder,
+        .form-textarea::placeholder {
+            color: var(--text-muted);
+            opacity: 1;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 120px;
+            font-family: inherit;
+        }
+
+        /* Enhanced select styling for mobile */
+        .form-select {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M7 10l5 5 5-5z"/></svg>');
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 20px;
+            padding-right: 40px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: var(--text-primary);
+            border: none;
+            padding: var(--spacing-md) var(--spacing-xl);
+            border-radius: var(--spacing-sm);
+            font-size: clamp(1rem, 4vw, 1.1rem);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 100%;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+            position: relative;
+            overflow: hidden;
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-xs);
+            font-family: inherit;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-primary:hover::before,
+        .btn-primary:focus::before {
+            left: 100%;
+        }
+
+        .btn-primary:hover,
+        .btn-primary:focus {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-radius: var(--spacing-sm);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: inherit;
+            font-size: clamp(0.9rem, 3vw, 1rem);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn-secondary:hover,
+        .btn-secondary:focus {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .results-empty {
+            text-align: center;
+            color: var(--text-muted);
+            padding: var(--spacing-2xl) var(--spacing-md);
+            font-size: clamp(1rem, 4vw, 1.1rem);
+        }
+
+        .result-item {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-md);
+            border-left: 4px solid #667eea;
+            backdrop-filter: blur(10px);
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--spacing-md);
+            flex-wrap: wrap;
+            gap: var(--spacing-sm);
+        }
+
+        .result-title {
+            color: var(--text-primary);
+            font-size: clamp(1.1rem, 4vw, 1.3rem);
+            font-weight: 700;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .severity-badge {
+            padding: 6px var(--spacing-md);
+            border-radius: 20px;
+            font-size: clamp(0.7rem, 3vw, 0.8rem);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        .severity-critical {
+            background: linear-gradient(135deg, #ff4757, #ff3742);
+            color: white;
+        }
+
+        .severity-high {
+            background: linear-gradient(135deg, #ffa502, #ff6348);
+            color: white;
+        }
+
+        .severity-medium {
+            background: linear-gradient(135deg, #3742fa, #2f3542);
+            color: white;
+        }
+
+        .severity-low {
+            background: linear-gradient(135deg, #2ed573, #1e90ff);
+            color: white;
+        }
+
+        .category-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--spacing-xs);
+            margin: var(--spacing-sm) 0;
+        }
+
+        .category-tag {
+            background: rgba(255, 255, 255, 0.2);
+            color: var(--text-primary);
+            padding: 4px var(--spacing-sm);
+            border-radius: var(--spacing-xs);
+            font-size: clamp(0.75rem, 3vw, 0.85rem);
+            font-weight: 500;
+        }
+
+        .fix-suggestions {
+            margin-top: var(--spacing-md);
+        }
+
+        .fix-item {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: var(--spacing-sm);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .fix-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--spacing-sm);
+            flex-wrap: wrap;
+            gap: var(--spacing-sm);
+        }
+
+        .fix-title {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: clamp(1rem, 4vw, 1.1rem);
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .confidence-indicator {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            flex-shrink: 0;
+        }
+
+        .confidence-bar {
+            width: 50px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2ed573, #1e90ff);
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fix-description {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: var(--spacing-sm);
+            font-size: clamp(0.9rem, 3vw, 1rem);
+        }
+
+        .fix-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: clamp(0.8rem, 3vw, 0.9rem);
+            color: var(--text-muted);
+            flex-wrap: wrap;
+            gap: var(--spacing-xs);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-2xl);
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-md);
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--card-border);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .stat-number {
+            font-size: clamp(1.8rem, 8vw, 2.5rem);
+            font-weight: 800;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-xs);
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: clamp(0.8rem, 3vw, 0.95rem);
+            font-weight: 500;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .github-section {
+            margin-top: var(--spacing-2xl);
+            padding: var(--spacing-lg);
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+        }
+
+        .github-form {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .github-input-group {
+            flex: 1;
+        }
+
+        /* Toast notification styles */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-radius: var(--spacing-sm);
+            box-shadow: var(--shadow-light);
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            max-width: calc(100vw - 40px);
+            word-wrap: break-word;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.success {
+            background: linear-gradient(135deg, #2ed573, #1e90ff);
+        }
+
+        .toast.error {
+            background: linear-gradient(135deg, #ff4757, #ff3742);
+        }
+
+        /* Accessibility improvements */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Focus styles for better accessibility */
+        *:focus {
+            outline: 2px solid rgba(255, 255, 255, 0.8);
+            outline-offset: 2px;
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            :root {
+                --card-bg: rgba(255, 255, 255, 0.3);
+                --card-border: rgba(255, 255, 255, 0.5);
+                --input-bg: rgba(255, 255, 255, 0.2);
+                --input-border: rgba(255, 255, 255, 0.4);
+            }
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Mobile-specific optimizations */
+        @media (max-width: 768px) {
+            body {
+                padding: var(--spacing-sm);
+            }
+
+            .container {
+                padding: var(--spacing-md);
+            }
+
+            .main-grid {
+                gap: var(--spacing-md);
+            }
+
+            .github-form {
+                flex-direction: column;
+            }
+
+            .result-header,
+            .fix-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .severity-badge {
+                align-self: flex-start;
+            }
+
+            .confidence-indicator {
+                align-self: flex-end;
+            }
+
+            .fix-meta {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: var(--spacing-sm);
+            }
+        }
+
+        /* Extra small screens */
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .category-tags {
+                justify-content: center;
+            }
+
+            .form-input,
+            .form-textarea,
+            .form-select {
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+        }
+
+        /* Large screens */
+        @media (min-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .github-form {
+                flex-direction: row;
+                align-items: end;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            /* Already optimized for dark theme */
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                background: white;
+                color: black;
+            }
+
+            .container {
+                background: white;
+                box-shadow: none;
+                border: 1px solid #ccc;
+            }
+
+            .card {
+                background: #f9f9f9;
+                border: 1px solid #ddd;
+            }
+
+            .btn-primary,
+            .btn-secondary {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🔧 AI Bug Triage System</h1>
+            <p class="subtitle">Intelligent bug classification and fix suggestions powered by Google AI</p>
+        </header>
+
+        <main class="main-grid">
+            <section class="card">
+                <h2 class="card-title">
+                    🐛 Submit Bug Report
+                </h2>
+                <form id="bugForm" novalidate>
+                    <div class="form-group">
+                        <label class="form-label" for="title">Bug Title *</label>
+                        <input 
+                            type="text" 
+                            id="title" 
+                            class="form-input" 
+                            placeholder="Brief description of the issue" 
+                            required 
+                            aria-describedby="title-help"
+                            maxlength="200"
+                        >
+                        <div id="title-help" class="sr-only">Enter a concise title describing the bug</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="description">Detailed Description *</label>
+                        <textarea 
+                            id="description" 
+                            class="form-textarea" 
+                            placeholder="Describe the bug in detail: steps to reproduce, expected vs actual behavior, error messages..." 
+                            required
+                            aria-describedby="description-help"
+                            maxlength="5000"
+                        ></textarea>
+                        <div id="description-help" class="sr-only">Provide detailed information about the bug including steps to reproduce</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="environment">Environment</label>
+                        <input 
+                            type="text" 
+                            id="environment" 
+                            class="form-input" 
+                            placeholder="OS, browser, version, device info..."
+                            aria-describedby="environment-help"
+                            maxlength="500"
+                        >
+                        <div id="environment-help" class="sr-only">Optional: Specify the environment where the bug occurs</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="component">Component/Module</label>
+                        <select id="component" class="form-select" aria-describedby="component-help">
+                            <option value="">Select component</option>
+                            <option value="frontend">Frontend</option>
+                            <option value="backend">Backend</option>
+                            <option value="database">Database</option>
+                            <option value="api">API</option>
+                            <option value="authentication">Authentication</option>
+                            <option value="ui">User Interface</option>
+                            <option value="performance">Performance</option>
+                            <option value="security">Security</option>
+                        </select>
+                        <div id="component-help" class="sr-only">Optional: Select the component or module affected by the bug</div>
+                    </div>
+
+                    <button type="submit" class="btn-primary" id="analyzeBtn" aria-describedby="analyze-help">
+                        🤖 Analyze with AI
+                    </button>
+                    <div id="analyze-help" class="sr-only">Submit the bug report for AI analysis and classification</div>
+                </form>
+            </section>
+
+            <section class="card">
+                <h2 class="card-title">
+                    📊 Analysis Results
+                </h2>
+                <div id="results" role="region" aria-live="polite" aria-label="Bug analysis results">
+                    <div class="results-empty">
+                        Submit a bug report to see AI-powered analysis, classification, and fix suggestions
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <section class="github-section">
+            <h2 class="card-title">
+                🔗 GitHub Integration
+            </h2>
+            <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md);">
+                Import bugs from GitHub repositories to enhance the AI model
+            </p>
+            <div class="github-form">
+                <div class="github-input-group">
+                    <label class="form-label" for="repoUrl">Repository URL</label>
+                    <input 
+                        type="url" 
+                        id="repoUrl" 
+                        class="form-input" 
+                        placeholder="https://github.com/owner/repository"
+                        aria-describedby="repo-help"
+                    >
+                    <div id="repo-help" class="sr-only">Enter the GitHub repository URL to sync issues from</div>
+                </div>
+                <button type="button" class="btn-secondary" id="syncBtn" aria-describedby="sync-help">
+                    Sync Issues
+                </button>
+                <div id="sync-help" class="sr-only">Import issues from the specified GitHub repository</div>
+            </div>
+        </section>
+
+        <section class="stats-grid" id="statsGrid" role="region" aria-label="System statistics">
+            <div class="stat-card">
+                <div class="stat-number" id="totalBugs" aria-label="Total bugs analyzed">-</div>
+                <div class="stat-label">Total Bugs Analyzed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="resolvedBugs" aria-label="Successfully resolved bugs">-</div>
+                <div class="stat-label">Successfully Resolved</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="accuracy" aria-label="AI accuracy rate">-</div>
+                <div class="stat-label">AI Accuracy Rate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="avgTime" aria-label="Average resolution time">-</div>
+                <div class="stat-label">Avg Resolution Time</div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Toast notification container -->
+    <div id="toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStatistics();
+
+            // Bug form submission
+            document.getElementById('bugForm').addEventListener('submit', handleBugSubmission);
+
+            // GitHub sync
+            document.getElementById('syncBtn').addEventListener('click', handleGitHubSync);
+
+            // Add input validation
+            setupFormValidation();
+
+            // Add touch event optimizations
+            setupTouchOptimizations();
+        });
+
+        function setupFormValidation() {
+            const titleInput = document.getElementById('title');
+            const descriptionInput = document.getElementById('description');
+
+            titleInput.addEventListener('input', function() {
+                if (this.value.length > 200) {
+                    this.value = this.value.substring(0, 200);
+                }
+            });
+
+            descriptionInput.addEventListener('input', function() {
+                if (this.value.length > 5000) {
+                    this.value = this.value.substring(0, 5000);
+                }
+            });
+        }
+
+        function setupTouchOptimizations() {
+            // Prevent double-tap zoom on buttons
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(button => {
+                button.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    this.click();
+                });
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            toast.setAttribute('role', 'alert');
+
+            container.appendChild(toast);
+
+            // Trigger animation
+            setTimeout(() => toast.classList.add('show'), 100);
+
+            // Remove after 5 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => container.removeChild(toast), 300);
+            }, 5000);
+        }
+
+        async function handleBugSubmission(e) {
+            e.preventDefault();
+
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            const originalText = analyzeBtn.innerHTML;
+
+            // Validate form
+            const title = document.getElementById('title').value.trim();
+            const description = document.getElementById('description').value.trim();
+
+            if (!title || !description) {
+                showToast('Please fill in both title and description fields', 'error');
+                return;
+            }
+
+            // Show loading state
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<span class="loading-spinner"></span> Analyzing...';
+            analyzeBtn.setAttribute('aria-busy', 'true');
+
+            try {
+                const formData = {
+                    title: title,
+                    description: description,
+                    environment: document.getElementById('environment').value.trim(),
+                    component: document.getElementById('component').value
+                };
+
+                const response = await fetch(`${API_BASE}/analyze-bug`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                displayResults(result);
+                showToast('Bug analysis completed successfully!', 'success');
+
+                // Refresh statistics
+                loadStatistics();
+
+            } catch (error) {
+                console.error('Error analyzing bug:', error);
+                displayError('Failed to analyze bug. Please check your connection and try again.');
+                showToast('Failed to analyze bug. Please try again.', 'error');
+            } finally {
+                // Reset button
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = originalText;
+                analyzeBtn.setAttribute('aria-busy', 'false');
+            }
+        }
+
+        async function handleGitHubSync() {
+            const syncBtn = document.getElementById('syncBtn');
+            const repoUrl = document.getElementById('repoUrl').value.trim();
+
+            if (!repoUrl) {
+                showToast('Please enter a GitHub repository URL', 'error');
+                document.getElementById('repoUrl').focus();
+                return;
+            }
+
+            // Validate URL format
+            const githubUrlPattern = /^https:\/\/github\.com\/[^\/]+\/[^\/]+\/?$/;
+            if (!githubUrlPattern.test(repoUrl)) {
+                showToast('Please enter a valid GitHub repository URL', 'error');
+                document.getElementById('repoUrl').focus();
+                return;
+            }
+
+            const originalText = syncBtn.innerHTML;
+            syncBtn.disabled = true;
+            syncBtn.innerHTML = '<span class="loading-spinner"></span> Syncing...';
+            syncBtn.setAttribute('aria-busy', 'true');
+
+            try {
+                const response = await fetch(`${API_BASE}/github-sync`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ repo_url: repoUrl })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                showToast(`Successfully synced ${result.processed_count} issues from GitHub!`, 'success');
+
+                // Clear the input
+                document.getElementById('repoUrl').value = '';
+
+                // Refresh statistics
+                loadStatistics();
+
+            } catch (error) {
+                console.error('Error syncing GitHub issues:', error);
+                showToast('Failed to sync GitHub issues. Please check the repository URL and try again.', 'error');
+            } finally {
+                syncBtn.disabled = false;
+                syncBtn.innerHTML = originalText;
+                syncBtn.setAttribute('aria-busy', 'false');
+            }
+        }
+
+        async function loadStatistics() {
+            try {
+                const response = await fetch(`${API_BASE}/stats`);
+                if (!response.ok) return;
+
+                const stats = await response.json();
+
+                // Animate number changes
+                animateNumber('totalBugs', stats.total_bugs || 0);
+                animateNumber('resolvedBugs', stats.resolved_bugs || 0);
+                animateNumber('accuracy', Math.round(stats.accuracy_estimate || 0), '%');
+                animateNumber('avgTime', stats.avg_resolution_time_hours || 0, 'h');
+
+            } catch (error) {
+                console.error('Error loading statistics:', error);
+            }
+        }
+
+        function animateNumber(elementId, targetValue, suffix = '') {
+            const element = document.getElementById(elementId);
+            const currentValue = parseInt(element.textContent) || 0;
+            const increment = Math.ceil((targetValue - currentValue) / 20);
+
+            if (increment === 0) {
+                element.textContent = targetValue + suffix;
+                return;
+            }
+
+            let current = currentValue;
+            const timer = setInterval(() => {
+                current += increment;
+                if ((increment > 0 && current >= targetValue) || (increment < 0 && current <= targetValue)) {
+                    current = targetValue;
+                    clearInterval(timer);
+                }
+                element.textContent = current + suffix;
+            }, 50);
+        }
+
+        function displayResults(result) {
+            const resultsDiv = document.getElementById('results');
+
+            const html = `
+                <div class="result-item">
+                    <div class="result-header">
+                        <div class="result-title">Bug Analysis Complete</div>
+                        <div class="severity-badge severity-${result.classification.severity}">
+                            ${result.classification.severity.toUpperCase()}
+                        </div>
+                    </div>
+
+                    <div class="category-tags">
+                        ${result.classification.categories.map(cat => 
+                            `<span class="category-tag">${cat}</span>`
+                        ).join('')}
+                    </div>
+
+                    <div style="margin: var(--spacing-md) 0; color: var(--text-secondary); font-size: clamp(0.9rem, 3vw, 1rem);">
+                        <strong>Priority Score:</strong> ${result.classification.priority_score}/100<br>
+                        <strong>Estimated Effort:</strong> ${result.classification.estimated_effort}<br>
+                        <strong>Suggested Team:</strong> ${result.classification.suggested_team}
+                    </div>
+
+                    <div class="fix-suggestions">
+                        <h3 style="color: var(--text-primary); margin-bottom: var(--spacing-md); font-size: clamp(1.1rem, 4vw, 1.2rem);">🔧 Fix Suggestions</h3>
+                        ${result.fix_suggestions.map(fix => `
+                            <div class="fix-item">
+                                <div class="fix-header">
+                                    <div class="fix-title">${fix.title}</div>
+                                    <div class="confidence-indicator">
+                                        <span style="font-size: clamp(0.7rem, 3vw, 0.8rem);">${Math.round(fix.confidence * 100)}%</span>
+                                        <div class="confidence-bar">
+                                            <div class="confidence-fill" style="width: ${fix.confidence * 100}%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="fix-description">${fix.description}</div>
+                                <div class="fix-meta">
+                                    <span>⏱️ ${fix.estimated_time}</span>
+                                    <span>⚠️ Risk: ${fix.risk_level}</span>
+                                    <span>📋 ${fix.source}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div style="margin-top: var(--spacing-md);">
+                        <h3 style="color: var(--text-primary); margin-bottom: var(--spacing-sm); font-size: clamp(1.1rem, 4vw, 1.2rem);">📋 Recommended Actions</h3>
+                        <ul style="color: var(--text-secondary); padding-left: var(--spacing-md); font-size: clamp(0.9rem, 3vw, 1rem);">
+                            ${result.recommended_actions.map(action => 
+                                `<li style="margin-bottom: var(--spacing-xs);">${action}</li>`
+                            ).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+
+            resultsDiv.innerHTML = html;
+
+            // Scroll to results on mobile
+            if (window.innerWidth <= 768) {
+                resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        function displayError(message) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <div class="result-item" style="border-left-color: #ff4757;">
+                    <div style="color: #ff4757; font-weight: 600; margin-bottom: var(--spacing-xs); font-size: clamp(1rem, 4vw, 1.1rem);">❌ Error</div>
+                    <div style="color: var(--text-secondary); font-size: clamp(0.9rem, 3vw, 1rem);">${message}</div>
+                </div>
+            `;
+        }
+
+        // Service Worker registration for offline support (optional)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                    console.log('ServiceWorker registration successful');
+                }, function(err) {
+                    console.log('ServiceWorker registration failed');
+                });
+            });
+        }
+    </script>
+</body>
+</html>
