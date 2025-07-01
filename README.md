@@ -1,43 +1,42 @@
+# 🧠 AI Bug Triage System
 
-# AI Bug Triage System
+Welcome to the **AI Bug Triage System**! This intelligent DevOps tool uses Google AI to automatically classify bugs, suggest fixes, and integrate seamlessly with your GitHub repositories—making issue management smarter and faster.
 
-An intelligent DevOps tool that uses Google AI to automatically classify bugs, suggest fixes, and integrate with GitHub repositories.
+## 🚀 Features
 
-## Features
+* **AI-Powered Bug Classification**
+   * Automatically assesses severity (Critical, High, Medium, Low)
+   * Detects bug categories (UI, Backend, Database, Security, etc.)
+   * Scores priority and estimates effort
 
-**AI-Powered Classification**
-- Automatic severity assessment (Critical, High, Medium, Low)
-- Category detection (UI, Backend, Database, Security, etc.)
-- Priority scoring and effort estimation
+* **Smart Fix Suggestions**
+   * AI-generated recommendations and code samples
+   * Step-by-step implementation guidance
+   * Risk assessment and time estimates
 
-**Smart Fix Suggestions**
-- AI-generated fix recommendations
-- Code examples and implementation steps
-- Risk assessment and time estimates
+* **GitHub Integration**
+   * Import/sync issues from your repositories
+   * Enables automatic issue classification and model training
 
-**GitHub Integration**
-- Import issues from GitHub repositories
-- Sync bug data for model training
-- Automatic issue classification
+* **Analytics & Insights**
+   * Bug resolution statistics
+   * Team performance metrics
+   * AI accuracy tracking
 
-**Analytics & Insights**
-- Bug resolution statistics
-- Team performance metrics
-- AI accuracy tracking
-
-## Quick Start
+## ⚡ Quick Start
 
 ### Prerequisites
-- Python 3.9+
-- Google AI API key
-- Docker (optional)
+
+* Python 3.9+
+* Google AI API key
+* Docker (optional, for containerized deployment)
 
 ### Installation
 
-1. **Clone the repository**
+1. **Clone this repository**
    ```bash
-   git clone <repository-url>
-   cd ai-bug-triage
+   git clone https://github.com/yourusername/ai-bug-triage
+   cd ai-in-devops
    ```
 
 2. **Install dependencies**
@@ -48,7 +47,7 @@ An intelligent DevOps tool that uses Google AI to automatically classify bugs, s
 3. **Set up environment variables**
    ```bash
    cp .env.example .env
-   # Edit .env with your API keys
+   # Edit .env and add your API keys
    ```
 
 4. **Run the application**
@@ -56,19 +55,18 @@ An intelligent DevOps tool that uses Google AI to automatically classify bugs, s
    python app.py
    ```
 
-5. **Open your browser**
-   Navigate to `http://localhost:5000`
+   Open your browser and go to `http://localhost:5000`
 
 ### Docker Deployment
 
 ```bash
-# Build and run with Docker Compose
 docker-compose up -d
 ```
 
-## API Endpoints
+## 🔌 API Endpoints
 
-### Analyze Bug
+### Analyze a Bug
+
 ```http
 POST /api/analyze-bug
 Content-Type: application/json
@@ -81,7 +79,8 @@ Content-Type: application/json
 }
 ```
 
-### GitHub Sync
+### Sync with GitHub
+
 ```http
 POST /api/github-sync
 Content-Type: application/json
@@ -92,63 +91,57 @@ Content-Type: application/json
 ```
 
 ### Get Statistics
+
 ```http
 GET /api/stats
 ```
 
-## Configuration
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `GOOGLE_AI_API_KEY` | Google AI API key | Yes |
-| `GITHUB_TOKEN` | GitHub personal access token | No |
-| `DATABASE_URL` | Database connection string | No |
-| `DEBUG` | Enable debug mode | No |
-
-### Model Training
-
-The system automatically learns from resolved bugs to improve accuracy:
+### Trigger Model Training
 
 ```http
 POST /api/train-model
 ```
 
-## Architecture
+## ⚙️ Configuration
+
+### Key Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GOOGLE_AI_API_KEY` | Google AI API key | Yes |
+| `GITHUB_TOKEN` | Your GitHub personal token | No |
+| `DATABASE_URL` | Database connection string | No |
+| `DEBUG` | Enable debug mode | No |
+
+## 🏗️ Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Flask API     │    │   Google AI     │
-│   (HTML/JS)     │◄──►│   (Python)      │◄──►│   (Gemini)      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                       ┌─────────────────┐    ┌─────────────────┐
-                       │   SQLite DB     │    │   ChromaDB      │
-                       │   (Metadata)    │    │   (Vectors)     │
-                       └─────────────────┘    └─────────────────┘
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│ Frontend    │    │ Flask API   │    │ Google AI   │
+│ (HTML/JS)   │<-->│ (Python)    │<-->│ (Gemini)    │
+└─────────────┘    └─────────────┘    └─────────────┘
+       │            ▼
+┌─────────────┐    ┌─────────────┐
+│ SQLite DB   │    │ ChromaDB    │
+│ (Metadata)  │    │ (Vectors)   │
+└─────────────┘    └─────────────┘
 ```
 
-## Contributing
+## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+1. Fork this repository
+2. Create a new feature branch
+3. Make your changes (add tests if needed)
+4. Submit a pull request
 
-## License
+## 📄 License
 
-MIT License - see LICENSE file for details.
+MIT License – see the `LICENSE` file for more info.
 
-## Support
+## 🙋 Support & Questions
 
-For issues and questions:
-- Create a GitHub issue
-- Check the documentation
-- Review the API examples
+* Create an issue on GitHub
+* Check the documentation and API examples
+* PRs and suggestions welcome!
 
----
-
-Built with love for DevOps teams
+Built with ❤️ for DevOps teams.
