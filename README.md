@@ -1,8 +1,8 @@
-# 🧠 AI Bug Triage System
+#  AI Bug Triage System
 
 Welcome to the **AI Bug Triage System**! This intelligent DevOps tool uses Google AI to automatically classify bugs, suggest fixes, and integrate seamlessly with your GitHub repositories—making issue management smarter and faster.
 
-## 🚀 Features
+##  Features
 
 * **AI-Powered Bug Classification**
    * Automatically assesses severity (Critical, High, Medium, Low)
@@ -23,7 +23,7 @@ Welcome to the **AI Bug Triage System**! This intelligent DevOps tool uses Googl
    * Team performance metrics
    * AI accuracy tracking
 
-## ⚡ Quick Start
+##  Quick Start
 
 ### Prerequisites
 
@@ -63,7 +63,7 @@ Welcome to the **AI Bug Triage System**! This intelligent DevOps tool uses Googl
 docker-compose up -d
 ```
 
-## 🔌 API Endpoints
+##  API Endpoints
 
 ### Analyze a Bug
 
@@ -102,7 +102,7 @@ GET /api/stats
 POST /api/train-model
 ```
 
-## ⚙️ Configuration
+##  Configuration
 
 ### Key Environment Variables
 
@@ -113,7 +113,7 @@ POST /api/train-model
 | `DATABASE_URL` | Database connection string | No |
 | `DEBUG` | Enable debug mode | No |
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
@@ -127,21 +127,21 @@ POST /api/train-model
 └─────────────┘    └─────────────┘
 ```
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork this repository
 2. Create a new feature branch
 3. Make your changes (add tests if needed)
 4. Submit a pull request
 
-## 📄 License
+## License
 
 MIT License – see the `LICENSE` file for more info.
 
-## 🙋 Support & Questions
+## Support & Questions
 
 * Create an issue on GitHub
 * Check the documentation and API examples
 * PRs and suggestions welcome!
 
-Built with ❤️ for DevOps teams.
+Built with love for DevOps teams.
